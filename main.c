@@ -72,7 +72,6 @@ int main(int argc, char **argv) {
             }
             if(chdir(new_path) != 0){
                 perror("Can't go to this directory\n");
-                return -1;
             }
             getcwd(cur_path, PATH_MAX);
             printf("new path: %s, old_path: %s\n", cur_path, path);
@@ -102,43 +101,3 @@ int main(int argc, char **argv) {
     close(sock_fd);
     printf("\nDisconnected\n");
 }
-
-
-
-//    while(1) {
-//        char buf[100];
-//        if (listen(sock_fd, 1) < 0) {
-//            printf("Can't connect to socket\n");
-//            close(sock_fd);
-//            return -1;
-//        }
-//
-//        struct sockaddr_in con_sock_addr;
-//        socklen_t con_socklen;
-//        int newsock_fd = accept(sock_fd, (struct sockaddr*)(&con_sock_addr), &con_socklen);
-//        if(newsock_fd < 0) {
-//            printf("Can't connect\n");
-//            return -1;
-//        }
-//
-//        int mes_size = read(newsock_fd, buf, sizeof(buf));
-//        if (mes_size > sizeof(buf)) {
-//            printf("Error while receiving message\n");
-//            return -1;
-//        }
-//
-//        if(buf[0] == '1') {
-//            printf("\nReceived message: ");
-//            puts(buf + 1);
-//            close(newsock_fd);
-//            memset(buf, 0, sizeof(buf));
-//        }
-//        else if(buf[0] == '0') {
-//            printf("\nShutting down....");
-//            close(newsock_fd);
-//            break;
-//        }
-//
-//    }
-
-
