@@ -1,6 +1,8 @@
 #include "libs.h"
 
 int main(int argc, char **argv) {
+    int ppid = getppid();
+
     int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock_fd < 0) {
         printf("Can't create socket");
@@ -15,11 +17,13 @@ int main(int argc, char **argv) {
     }
 
     char *buf = calloc(MAX_MESSAGE_SIZE, 1);
-    strcpy(buf, argv[1]);
+    sprintf(buf, "%05d", ppid);
+    strcat(buf, argv[1]);
     if(argv[2]) {
         strcat(buf, " ");
         strcat(buf, argv[2]);
     }
+
     int sent = sendto(sock_fd, buf, strlen(buf), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
     if(sent < 0) {
         printf("Error while sending\n");

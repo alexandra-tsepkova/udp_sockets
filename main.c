@@ -25,6 +25,79 @@ char *get_path(char *key, char **table) {
     exit(1);
 }
 
+struct context{
+    pthread_mutex_t *mutex;
+    char **table;
+    int sock_fd;
+};
+
+void *routine(void* context) {
+    int sock_fd = ((struct context*)context)->sock_fd;
+    char **table = ((struct context*)context)->table;
+    pthread_mutex_t *mutex = ((struct context*)context)->mutex;
+
+    while (1) {
+        struct sockaddr_in rec_addr;
+        char *ppid = calloc(PPID_SIZE, 1);
+        char *buf = calloc(MAX_MESSAGE_SIZE, 1);
+        int addr_size = sizeof(rec_addr);
+        int res = recvfrom(sock_fd, buf, MAX_MESSAGE_SIZE, 0, (struct sockaddr * restrict)&rec_addr, (socklen_t * restrict)&addr_size);
+        if (res < 0) {
+            perror("Can't read message\n");
+            exit (-1);
+        }
+        char *client_ip = to_addr(&rec_addr);
+        strncpy(ppid, buf, PPID_SIZE);
+        char *key = calloc(strlen(client_ip) + PPID_SIZE, sizeof(char));
+        strcpy(key, client_ip);
+        strcat(key, "-");
+        strcat(key, ppid);
+
+        printf("%s\n", key);
+        puts(buf + PPID_SIZE);
+
+        pthread_mutex_lock(mutex);
+        char *path = get_path(key, table);
+        pthread_mutex_unlock(mutex);
+
+        if(strncmp(buf + PPID_SIZE, "cd", 2) == 0) {
+            char *new_path = calloc(1, PATH_MAX);
+            char *cur_path = calloc(1, PATH_MAX);
+            strcpy(new_path, (buf + PPID_SIZE + 3));
+            fflush(stdout);
+            if(chdir(path) != 0){
+                perror("Can't go to this directory\n");
+                exit (-1);
+            }
+            if(chdir(new_path) != 0){
+                perror("Can't go to this directory\n");
+            }
+            getcwd(cur_path, PATH_MAX);
+            printf("new path: %s, old_path: %s\n", cur_path, path);
+            strcpy(path, cur_path);
+            free(new_path);
+
+        } else if(strncmp(buf + PPID_SIZE, "ls", 2) == 0) {
+            DIR *dir = NULL;
+            struct dirent *this_dir;
+            dir = opendir(path);
+            if(!dir) {
+                perror("Can't read directory\n");
+                exit(-1);
+            }
+            while((this_dir = readdir(dir)) != NULL) {
+                printf("%s\n", this_dir->d_name);
+            }
+            if(closedir(dir) != 0){
+                perror("Can't close directory\n");
+                exit(-1);
+            }
+        }
+        free(buf);
+        free(key);
+    }
+    return NULL;
+}
 
 int main(int argc, char **argv) {
     char **table = calloc(TABLE_SIZE * 2, sizeof(char*));
@@ -47,57 +120,28 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    while (1) {
-        struct sockaddr_in rec_addr;
-        char *buf = calloc(MAX_MESSAGE_SIZE, 1);
-        int addr_size = sizeof(rec_addr);
-        int res = recvfrom(sock_fd, buf, MAX_MESSAGE_SIZE, 0, (struct sockaddr * restrict)&rec_addr, (socklen_t * restrict)&addr_size);
-        if (res < 0) {
-            printf("Can't read message\n");
-            return (-1);
-        }
-        char *key = to_addr(&rec_addr);
-        printf("%s\n", key);
-        puts(buf);
-
-        if(strncmp(buf, "cd", 2) == 0) {
-            char *path = get_path(key, table);
-            char *new_path = calloc(1, PATH_MAX);
-            char *cur_path = calloc(1, PATH_MAX);
-            strcpy(new_path, (buf + 3));
-            fflush(stdout);
-            if(chdir(path) != 0){
-                perror("Can't go to this directory\n");
-                return -1;
-            }
-            if(chdir(new_path) != 0){
-                perror("Can't go to this directory\n");
-            }
-            getcwd(cur_path, PATH_MAX);
-            printf("new path: %s, old_path: %s\n", cur_path, path);
-            strcpy(path, cur_path);
-            free(new_path);
-
-        } else if(strncmp(buf, "ls", 2) == 0) {
-            char *path = get_path(key, table);
-            DIR *dir = NULL;
-            struct dirent *this_dir;
-            dir = opendir(path);
-            if(!dir) {
-                perror("Can't read directory\n");
-                exit(-1);
-            }
-            while((this_dir = readdir(dir)) != NULL) {
-                printf("%s\n", this_dir->d_name);
-            }
-            if(closedir(dir) != 0){
-                perror("Can't close directory\n");
-                exit(-1);
-            }
-        }
-        free(buf);
-        free(key);
+    pthread_mutex_t mutex;
+    if(pthread_mutex_init(&mutex, NULL) != 0){
+        perror("Can't create mutex\n");
+        exit(-1);
     }
+
+    struct context variables = {&mutex, table, sock_fd};
+
+    pthread_t thread_id[MAX_THREADS];
+    for(int i = 0; i < MAX_THREADS; ++i) {
+        if(pthread_create((pthread_t *)(thread_id + i), NULL, &routine, (void*)&variables) != 0){
+            perror("Can't create thread\n");
+            exit(-1);
+        }
+    }
+
+
+    void *exi_st;
+    for(int i = 0; i < MAX_THREADS; ++i)    {
+        pthread_join(thread_id[i], &exi_st);
+    }
+
     close(sock_fd);
     printf("\nDisconnected\n");
 }
