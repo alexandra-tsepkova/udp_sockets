@@ -1,13 +1,12 @@
-#include <stdio.h>
 #include "libs.h"
 
-char *to_addr (struct sockaddr_in *rec_addr) {
-    char *addr = (char *)calloc(25, 1);
-    char *inet_addr = calloc(20, 1);
-    sprintf(addr, "%s", inet_ntop(AF_INET, (const void *)&(rec_addr->sin_addr.s_addr), inet_addr, 20)); //, (unsigned short)ntohs(rec_addr->sin_port));
-    free(inet_addr);
-    return addr;
-}
+//char *to_addr (struct sockaddr_in *rec_addr) {
+//    char *addr = (char *)calloc(25, 1);
+//    char *inet_addr = calloc(20, 1);
+//    sprintf(addr, "%s", inet_ntop(AF_INET, (const void *)&(rec_addr->sin_addr.s_addr), inet_addr, 20)); //, (unsigned short)ntohs(rec_addr->sin_port));
+//    free(inet_addr);
+//    return addr;
+//}
 
 
 char *get_path(char *key, char **table) {
@@ -115,9 +114,9 @@ int main(int argc, char **argv) {
     sock_addr.sin_addr = addr;
 
     if (bind(sock_fd, (const struct sockaddr*)(&sock_addr), (socklen_t)sizeof(sock_addr)) < 0) {
-        printf("Can't assign address to a socket\n");
+        perror("Can't assign address to a socket\n");
         close(sock_fd);
-        return -1;
+        exit(-1);
     }
 
     pthread_mutex_t mutex;
@@ -136,6 +135,52 @@ int main(int argc, char **argv) {
         }
     }
 
+    int b_sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if(b_sock_fd < 0) {
+        printf("Can't create socket\n");
+        return -1;
+    }
+
+    struct sockaddr_in b_sock_addr;
+    int b_addr_len = sizeof(struct sockaddr_in);
+
+    memset((void*)&b_sock_addr, 0, b_addr_len);
+    b_sock_addr.sin_family = AF_INET;
+    b_sock_addr.sin_port = htons(B_PORT); //!!
+    b_sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(b_sock_fd, (const struct sockaddr*)(&b_sock_addr), b_addr_len) < 0) {
+        perror("Can't assign address to a socket (broadcast)\n");
+        close(b_sock_fd);
+        exit(-1);
+    }
+
+    while (1) {
+        struct sockaddr_in b_rec_addr;
+        char *b_buf = calloc(MAX_MESSAGE_SIZE, 1);
+        int b_addr_size = sizeof(b_rec_addr);
+        int b;
+        b = recvfrom(b_sock_fd, b_buf, MAX_MESSAGE_SIZE, 0, (struct sockaddr *restrict) &b_rec_addr,
+                     (socklen_t *restrict) &b_addr_size);
+        if (b < 0) {
+            perror("Can't read message\n");
+            exit(-1);
+        }
+
+        if(strcmp(b_buf, "Is anybody here?") == 0){
+            printf("\nBroadcast message received; sending response\n");
+            if(sendto(b_sock_fd, "Response message", strlen("Response message"), 0, (const struct sockaddr*) &b_rec_addr,
+                    b_addr_len) < 0){
+                perror("Can't send response message to client\n");
+                exit(-1);
+            }
+
+
+        }
+        //printf("\n\n%s\ncheck\n", b_buf);
+        //puts(b_buf);
+
+    }
 
     void *exi_st;
     for(int i = 0; i < MAX_THREADS; ++i)    {

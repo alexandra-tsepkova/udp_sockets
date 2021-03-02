@@ -18,3 +18,12 @@
 #define DEFAULT_PATH "/"
 #define MAX_THREADS 5
 #define PPID_SIZE 5
+#define B_PORT 9999
+
+char *to_addr (struct sockaddr_in *rec_addr) {
+    char *addr = (char *)calloc(25, 1);
+    char *inet_addr = calloc(20, 1);
+    sprintf(addr, "%s", inet_ntop(AF_INET, (const void *)&(rec_addr->sin_addr.s_addr), inet_addr, 20)); //, (unsigned short)ntohs(rec_addr->sin_port));
+    free(inet_addr);
+    return addr;
+}
